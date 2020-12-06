@@ -1,0 +1,308 @@
+Received: from DEN-EXDDA-S12.corp.ebay.com ([fe80::40c1:9cf7:d21e:46c]) by
+ DEN-EXMHT-001.corp.ebay.com ([fe80::345e:2420:7d3d:208d%13]) with mapi id
+ 14.02.0318.004; Fri, 11 Jan 2013 07:07:02 -0700
+From: "McCartney, Mike" <mmccartney@paypal.com>
+To: "Smith, Owen" <osmith@paypal.com>, "Wahid, Moied" <mmoied@ebay.com>,
+	"Hsu, Stan" <shsu@ebay.com>, "Rastogi, Perv" <pkrastogi@paypal.com>,
+	"Vulpius, Steffen" <svulpius@paypal.com>, "Yen, Frank" <fryen@paypal.com>,
+	"Thurman, Tucker" <tthurman@paypal.com>, "Braschi, Terry"
+	<tbraschi@paypal.com>, "Kang, Kenneth" <kkang@paypal.com>
+Subject: Re: Investigating Helix and PPSM "on the cheap"
+Thread-Topic: Investigating Helix and PPSM "on the cheap"
+Thread-Index: AQHN73U5b9zOPfVS1UGHGIlGBqvw2ZhDUO0A
+Date: Fri, 11 Jan 2013 07:07:01 -0700
+Message-ID: <630B943E49791E4D80D389F5D53793FC27A2064B@DEN-EXDDA-S12.corp.ebay.com>
+In-Reply-To: <B2B7130B0A992543A117F5CA668643930D347046@DEN-EXDDA-S11.corp.ebay.com>
+Accept-Language: en-US
+Content-Language: en-US
+X-MS-Has-Attach:
+X-MS-Exchange-Organization-SCL: -1
+X-MS-TNEF-Correlator: <630B943E49791E4D80D389F5D53793FC27A2064B@DEN-EXDDA-S12.corp.ebay.com>
+user-agent: Microsoft-MacOutlook/14.2.5.121010
+MIME-Version: 1.0
+X-MS-Exchange-Organization-AuthSource: DEN-EXMHT-001.corp.ebay.com
+X-MS-Exchange-Organization-AuthAs: Internal
+X-MS-Exchange-Organization-AuthMechanism: 04
+X-Originating-IP: [10.245.17.94]
+X-MS-Exchange-Organization-AVStamp-Mailbox: MSFTFF;1;0;0 0 0
+Content-type: multipart/alternative;
+	boundary="B_3440738357_3209356"
+
+> This message is in MIME format. Since your mail reader does not understand
+this format, some or all of this message may not be legible.
+
+--B_3440738357_3209356
+Content-type: text/plain;
+	charset="ISO-8859-1"
+Content-transfer-encoding: quoted-printable
+
+Perv,
+
+Are you saying that in an Icarus (OSGI) context you need
+"$RPM_INSTALL_PREFIX" ?  I wouldn't think so and I would think that fixing
+the framework to with Icarus would also work with PPSM?
+
+Owen,
+
+Can we still use yum if we make the package Requires a config file/package
+that puppet can provide?  If we have to go the custom route, is there even =
+a
+point in using rpm ?  How about rpm2cpio and bypassing the rpmdb?  I though=
+t
+the plan was to use .zip  anyway=8A
+
+Mike
+
+
+From: <Smith>, Owen Smith <osmith@paypal.com>
+Date: Thursday, January 10, 2013 2:58 PM
+To: Moied Wahid <mmoied@ebay.com>, Stan Hsu <shsu@ebay.com>, Mike McCartney
+<mmccartney@paypal.com>, Perv  Rastogi <pkrastogi@paypal.com>, "Vulpius,
+Steffen" <svulpius@paypal.com>, "Yen, Frank" <fryen@paypal.com>, Tucker
+Thurman <tthurman@paypal.com>,  "Braschi, Terry" <tbraschi@paypal.com>,
+"Kang, Kenneth" <kkang@paypal.com>
+Subject: Investigating Helix and PPSM "on the cheap"
+
+Greetings,
+
+Per Moied's request, I've been looking into whether there is a solution for
+managing Helix and Sparta apps in PPSM with minimal changes to the framewor=
+k
+and applications; i.e. sticking with the legacy RPM-based deploy mechanism
+we use in stages today.  I've started my investigation with Helix, speaking
+with Perv and Steffen and looking at the Helix framework code, and here are
+the results so far:
+
+- Assume we use the YUM provider. Then the major problem I've found with
+installing a legacy Helix RPM is the switch of the prefix directory from
+/x/web/<STAGE> to /x/web/LIVE.
+- It is, unfortunately, not just LayoutToCdb that uses the prefix to
+determine configuration (this is unfortunate because we've already fixed
+LayoutToCdb to work in a PPSM-managed situation). The postinstallation
+scripts in the Helix application also use  the prefix. In particular,
+postinstall.sh sets an environment variable STAGE based on
+$RPM_INSTALL_PREFIX, and passes this variable as a command line option to
+several subsidiary deploy tools in the framework. This value also ends up i=
+n
+a config file called  deploy-info.properties which several other tools and
+applications use.
+- Changing postinstall.sh is a change to the helix framework. The minimal
+impact I see therefore in following this route is 1) making the change to
+all currently used versions of the framework, while ensuring the deploy
+scripts still work correctly in  legacy deploys, and 2) getting all Helix
+app owners to upgrade their framework.
+- Perv and Steffen also believe that there will be additional places across
+Helix application code that will attempt to use the installation path to
+determine what environment the application is in. However, the extent of
+this is currently unknown.
+- Perv maintains that a framework change to Helix at this point in the game=
+,
+especially one that reaches across multiple framework versions, is
+infeasible both for Java Infrastructure and for the app owners.
+
+Assuming Perv is right and this path is infeasible, then we must break the
+assumption that the YUM provider is used to install packages, and figure ou=
+t
+how to get Puppet to do purely legacy installations, installing with a
+custom RPMDB and prefix /x/web/<STAGE>.  This presents significant
+challenges on the Puppet side:
+
+- Either a custom provider must be built for the RPM installation, or we
+must make careful use of exec resources to install packages and updates.
+- An additional Puppet class must be developed to initialize the RPM
+database and install standard legacy packages (provider & logs at a
+minimum).
+
+Both approaches involve a significantly reduced value proposition,
+especially in the second approach where Puppet's management will largely be
+reduced to simply trying to reproduce what Yoda already does. Further, the
+second approach, if adopted, begs  the question of whether C++/Gimp package
+conversion still needs to go forward, since that legacy solution could
+manage legacy C++ packages as well.
+
+If our goal for this next phase is just to get Puppet managing at all costs=
+,
+then the second approach could be explored further. But Tucker & I have lon=
+g
+maintained that that approach is a lateral step, and have argued against
+this approach from the inception  of the program.
+
+As-yet-unanswered questions:
+- If we switch back to RPMs for Java applications, we need to determine
+whether there is any work in getting them to be included in labels as RPMs
+instead of Maven artifacts. Would we need  any Fusion changes?
+- How would topo work in this case? Can we get away with just topo-yaml? Or
+do we need to install a legacy topo package as well?
+- How would config overrides work in this case? (Kenneth had a solution
+proposed for this on the C++ side; I need to see where he's at with that.)
+- How does database configuration work? To my surprise my helixtestserv
+installation used DEVPLAT as the database, not STAGE2FOO or LIVE. I'm not
+sure how that happened.
+
+-- O
+
+
+
+
+--B_3440738357_3209356
+Content-type: text/html;
+	charset="ISO-8859-1"
+Content-transfer-encoding: quoted-printable
+
+<html>
+<head>
+<meta http-equiv=3D"Content-Type" content=3D"text/html; charset=3Dutf-8">
+</head>
+<body style=3D"word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-=
+break: after-white-space; color: rgb(0, 0, 0); font-size: 14px; font-family:=
+ Calibri, sans-serif; ">
+<div>Perv,</div>
+<div><br>
+</div>
+<div>Are you saying that in an Icarus (OSGI) context you need &quot;$RPM_IN=
+STALL_PREFIX&quot; ? &nbsp;I wouldn't think so and I would think that fixing=
+ the framework to with Icarus would also work with PPSM?</div>
+<div><br>
+</div>
+<div>Owen,</div>
+<div><br>
+</div>
+<div>Can we still use yum if we make the package Requires a config file/pac=
+kage that puppet can provide? &nbsp;If we have to go the custom route, is th=
+ere even a point in using rpm ? &nbsp;How about rpm2cpio and bypassing the r=
+pmdb? &nbsp;I thought the plan was to use .zip
+ anyway=8A</div>
+<div><br>
+</div>
+<div>Mike</div>
+<div><br>
+</div>
+<div><br>
+</div>
+<span id=3D"OLK_SRC_BODY_SECTION">
+<div style=3D"font-family:Calibri; font-size:11pt; text-align:left; color:bla=
+ck; BORDER-BOTTOM: medium none; BORDER-LEFT: medium none; PADDING-BOTTOM: 0i=
+n; PADDING-LEFT: 0in; PADDING-RIGHT: 0in; BORDER-TOP: #b5c4df 1pt solid; BOR=
+DER-RIGHT: medium none; PADDING-TOP: 3pt">
+<span style=3D"font-weight:bold">From: </span>&lt;Smith&gt;, Owen Smith &lt;<=
+a href=3D"mailto:osmith@paypal.com">osmith@paypal.com</a>&gt;<br>
+<span style=3D"font-weight:bold">Date: </span>Thursday, January 10, 2013 2:58=
+ PM<br>
+<span style=3D"font-weight:bold">To: </span>Moied Wahid &lt;<a href=3D"mailto:m=
+moied@ebay.com">mmoied@ebay.com</a>&gt;, Stan Hsu &lt;<a href=3D"mailto:shsu@e=
+bay.com">shsu@ebay.com</a>&gt;, Mike McCartney &lt;<a href=3D"mailto:mmccartne=
+y@paypal.com">mmccartney@paypal.com</a>&gt;, Perv
+ Rastogi &lt;<a href=3D"mailto:pkrastogi@paypal.com">pkrastogi@paypal.com</a>=
+&gt;, &quot;Vulpius, Steffen&quot; &lt;<a href=3D"mailto:svulpius@paypal.com">=
+svulpius@paypal.com</a>&gt;, &quot;Yen, Frank&quot; &lt;<a href=3D"mailto:frye=
+n@paypal.com">fryen@paypal.com</a>&gt;, Tucker Thurman &lt;<a href=3D"mailto:t=
+thurman@paypal.com">tthurman@paypal.com</a>&gt;,
+ &quot;Braschi, Terry&quot; &lt;<a href=3D"mailto:tbraschi@paypal.com">tbrasc=
+hi@paypal.com</a>&gt;, &quot;Kang, Kenneth&quot; &lt;<a href=3D"mailto:kkang@p=
+aypal.com">kkang@paypal.com</a>&gt;<br>
+<span style=3D"font-weight:bold">Subject: </span>Investigating Helix and PPSM=
+ &quot;on the cheap&quot;<br>
+</div>
+<div><br>
+</div>
+<div>
+<div style=3D"word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-b=
+reak: after-white-space; color: rgb(0, 0, 0); font-size: 14px; font-family: =
+Calibri, sans-serif; ">
+<div>Greetings,</div>
+<div><br>
+</div>
+<div>Per Moied's request, I've been looking into whether there is a solutio=
+n for managing Helix and Sparta apps in PPSM with minimal changes to the fra=
+mework and applications; i.e. sticking with the legacy RPM-based deploy mech=
+anism we use in stages today.
+ I've started my investigation with Helix, speaking with Perv and Steffen a=
+nd looking at the Helix framework code, and here are the results so far:</di=
+v>
+<div><br>
+</div>
+<div>- Assume we use the YUM provider. Then the major problem I've found wi=
+th installing a legacy Helix RPM is the switch of the prefix directory from =
+/x/web/&lt;STAGE&gt; to /x/web/LIVE.</div>
+<div>- It is, unfortunately, not just LayoutToCdb that uses the prefix to d=
+etermine configuration (this is unfortunate because we've already fixed Layo=
+utToCdb to work in a PPSM-managed situation). The postinstallation scripts i=
+n the Helix application also use
+ the prefix. In particular, postinstall.sh sets an environment variable STA=
+GE based on $RPM_INSTALL_PREFIX, and passes this variable as a command line =
+option to several subsidiary deploy tools in the framework. This value also =
+ends up in a config file called
+ deploy-info.properties which several other tools and applications use.</di=
+v>
+<div>- Changing postinstall.sh is a change to the helix framework. The mini=
+mal impact I see therefore in following this route is 1) making the change t=
+o all currently used versions of the framework, while ensuring the deploy sc=
+ripts still work correctly in
+ legacy deploys, and 2) getting all Helix app owners to upgrade their frame=
+work.</div>
+<div>- Perv and Steffen also believe that there will be additional places a=
+cross Helix application code that will attempt to use the installation path =
+to determine what environment the application is in. However, the extent of =
+this is currently unknown.</div>
+<div>- Perv maintains that a framework change to Helix at this point in the=
+ game, especially one that reaches across multiple framework versions, is in=
+feasible both for Java Infrastructure and for the app owners.</div>
+<div><br>
+</div>
+<div>Assuming Perv is right and this path is infeasible, then we must break=
+ the assumption that the YUM provider is used to install packages, and figur=
+e out how to get Puppet to do purely legacy installations, installing with a=
+ custom RPMDB and prefix /x/web/&lt;STAGE&gt;.
+ This presents significant challenges on the Puppet side:</div>
+<div><br>
+</div>
+<div>- Either a custom provider must be built for the RPM installation, or =
+we must make careful use of exec resources to install packages and updates.<=
+/div>
+<div>- An additional Puppet class must be developed to initialize the RPM d=
+atabase and install standard legacy packages (provider &amp; logs at a minim=
+um).</div>
+<div><br>
+</div>
+<div>Both approaches involve a significantly reduced value proposition, esp=
+ecially in the second approach where Puppet's management will largely be red=
+uced to simply trying to reproduce what Yoda already does. Further, the seco=
+nd approach, if adopted, begs
+ the question of whether C&#43;&#43;/Gimp package conversion still needs to=
+ go forward, since that legacy solution could manage legacy C&#43;&#43; pack=
+ages as well.</div>
+<div><br>
+</div>
+<div>If our goal for this next phase is just to get Puppet managing at all =
+costs, then the second approach could be explored further. But Tucker &amp; =
+I have long maintained that that approach is a lateral step, and have argued=
+ against this approach from the inception
+ of the program.</div>
+<div><br>
+</div>
+<div>As-yet-unanswered questions:</div>
+<div>- If we switch back to RPMs for Java applications, we need to determin=
+e whether there is any work in getting them to be included in labels as RPMs=
+ instead of Maven artifacts. Would we need &nbsp;any Fusion changes?</div>
+<div>- How would topo work in this case? Can we get away with just topo-yam=
+l? Or do we need to install a legacy topo package as well?</div>
+<div>- How would config overrides work in this case? (Kenneth had a solutio=
+n proposed for this on the C&#43;&#43; side; I need to see where he's at wit=
+h that.)</div>
+<div>- How does database configuration work? To my surprise my helixtestser=
+v installation used DEVPLAT as the database, not STAGE2FOO or LIVE. I'm not =
+sure how that happened.</div>
+<div><br>
+</div>
+<div>-- O</div>
+<div><br>
+</div>
+</div>
+</div>
+</span>
+</body>
+</html>
+
+
+--B_3440738357_3209356--
+
